@@ -14,7 +14,7 @@ export default function HomePage() {
         <div
           className="absolute inset-0 bg-gradient-to-br from-primary/20 via-background to-accent/20"
           style={{
-            backgroundImage: `url(/placeholder.svg?height=600&width=1200&query=sports+action+stadium+crowd)`,
+            backgroundImage: `url(https://i.pinimg.com/736x/6e/09/1f/6e091fd1dbd666fde564f2dcbebad729.jpg)`,
             backgroundSize: "cover",
             backgroundPosition: "center",
             backgroundBlendMode: "overlay",
