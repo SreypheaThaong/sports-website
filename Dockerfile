@@ -3,25 +3,20 @@
 # ================================
 FROM node:20 AS builder
 
-# Set working directory
 WORKDIR /app
 
-# Copy dependency files first (for caching)
 COPY package*.json ./
 COPY yarn.lock* ./
 COPY pnpm-lock.yaml* ./
 
-# Install dependencies based on package manager
 RUN corepack enable && \
     if [ -f yarn.lock ]; then yarn install; \
     elif [ -f pnpm-lock.yaml ]; then pnpm install; \
     else npm install; fi
 
-# Copy the rest of the project
 COPY . .
 
-# Detect framework and build
-RUN echo "Detected React/Next/Vite project" && \
+RUN echo "Building project..." && \
     if [ -f yarn.lock ]; then yarn build; \
     elif [ -f pnpm-lock.yaml ]; then pnpm run build; \
     else npm run build; fi
@@ -36,26 +31,30 @@ WORKDIR /app
 ENV NODE_ENV=production
 EXPOSE 3000
 
-# Copy package files
 COPY --from=builder /app/package*.json ./
+COPY --from=builder /app/yarn.lock* ./
+COPY --from=builder /app/pnpm-lock.yaml* ./
 
-# Copy only existing build outputs (Next.js)
-COPY --from=builder /app/.next ./.next
-COPY --from=builder /app/public ./public
-COPY --from=builder /app/next.config.mjs ./ 
+# Copy and detect framework build outputs safely
+COPY --from=builder /app /tmp/app
 
-# Install production dependencies (supports npm, yarn, pnpm)
+RUN mkdir -p /app && \
+    if [ -d "/tmp/app/.next" ]; then cp -r /tmp/app/.next . && cp -r /tmp/app/public ./; fi && \
+    if [ -d "/tmp/app/dist" ]; then cp -r /tmp/app/dist ./; fi && \
+    if [ -d "/tmp/app/build" ]; then cp -r /tmp/app/build ./; fi && \
+    if [ -f "/tmp/app/next.config.mjs" ]; then cp /tmp/app/next.config.mjs ./; fi
+
 RUN corepack enable && \
-    if [ -f yarn.lock ]; then \
-        echo "Using Yarn"; \
-        yarn install --production --frozen-lockfile; \
-    elif [ -f pnpm-lock.yaml ]; then \
-        echo "Using PNPM"; \
-        pnpm install --prod --frozen-lockfile; \
-    else \
-        echo "Using NPM"; \
-        npm install --omit=dev --legacy-peer-deps; \
-    fi
+    if [ -f yarn.lock ]; then yarn install --production --frozen-lockfile; \
+    elif [ -f pnpm-lock.yaml ]; then pnpm install --prod --frozen-lockfile; \
+    else npm install --omit=dev --legacy-peer-deps; fi
 
-# Default command
-CMD ["npm", "start"]
+CMD if [ -d ".next" ]; then \
+        echo "Starting Next.js..."; npm run start; \
+    elif [ -d "dist" ]; then \
+        echo "Serving Vite app..."; npx serve -s dist -l 3000; \
+    elif [ -d "build" ]; then \
+        echo "Serving React app..."; npx serve -s build -l 3000; \
+    else \
+        echo "No build output found. Exiting."; exit 1; \
+    fi
